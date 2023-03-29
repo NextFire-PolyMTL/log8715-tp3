@@ -1,3 +1,5 @@
+#define AZERTY
+
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -5,6 +7,20 @@ using UnityEngine;
 
 public class Player : NetworkBehaviour
 {
+#region keycodes
+#if AZERTY
+    private const KeyCode m_UpKeyCode = KeyCode.Z;
+    private const KeyCode m_LeftKeyCode = KeyCode.Q;
+    private const KeyCode m_DownKeyCode = KeyCode.S;
+    private const KeyCode m_RightKeyCode = KeyCode.D;
+#else
+    private const KeyCode m_UpKeyCode = KeyCode.W;
+    private const KeyCode m_LeftKeyCode = KeyCode.A;
+    private const KeyCode m_DownKeyCode = KeyCode.S;
+    private const KeyCode m_RightKeyCode = KeyCode.D;
+#endif
+#endregion
+
     [SerializeField]
     private float m_Velocity;
 
@@ -51,7 +67,7 @@ public class Player : NetworkBehaviour
             UpdatePositionServer();
         }
 
-        // Seul le client qui possede cette entite peut envoyer ses inputs. 
+        // Seul le client qui possede cette entite peut envoyer ses inputs.
         if (IsClient && IsOwner)
         {
             UpdateInputClient();
@@ -91,19 +107,19 @@ public class Player : NetworkBehaviour
     private void UpdateInputClient()
     {
         Vector2 inputDirection = new Vector2(0, 0);
-        if (Input.GetKey(KeyCode.W))
+        if (Input.GetKey(m_UpKeyCode))
         {
             inputDirection += Vector2.up;
         }
-        if (Input.GetKey(KeyCode.A))
+        if (Input.GetKey(m_LeftKeyCode))
         {
             inputDirection += Vector2.left;
         }
-        if (Input.GetKey(KeyCode.S))
+        if (Input.GetKey(m_DownKeyCode))
         {
             inputDirection += Vector2.down;
         }
-        if (Input.GetKey(KeyCode.D))
+        if (Input.GetKey(m_RightKeyCode))
         {
             inputDirection += Vector2.right;
         }
