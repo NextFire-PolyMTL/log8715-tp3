@@ -7,7 +7,7 @@ using UnityEngine;
 
 public class Player : NetworkBehaviour
 {
-#region keycodes
+    #region keycodes
 #if AZERTY
     private const KeyCode m_UpKeyCode = KeyCode.Z;
     private const KeyCode m_LeftKeyCode = KeyCode.Q;
@@ -19,7 +19,7 @@ public class Player : NetworkBehaviour
     private const KeyCode m_DownKeyCode = KeyCode.S;
     private const KeyCode m_RightKeyCode = KeyCode.D;
 #endif
-#endregion
+    #endregion
 
     [SerializeField]
     private float m_Velocity;
@@ -44,13 +44,19 @@ public class Player : NetworkBehaviour
 
     private NetworkVariable<Vector2> m_Position = new NetworkVariable<Vector2>();
 
-    public Vector2 Position => m_Position.Value;
+    private Vector2 m_LocalPosition;
+    public Vector2 Position => (IsClient && IsOwner) ? m_LocalPosition : m_Position.Value;
 
     private Queue<Vector2> m_InputQueue = new Queue<Vector2>();
 
     private void Awake()
     {
         m_GameState = FindObjectOfType<GameState>();
+
+        if (IsClient && IsOwner)
+        {
+            m_LocalPosition = new();
+        }
     }
 
     private void FixedUpdate()
@@ -64,44 +70,46 @@ public class Player : NetworkBehaviour
         // Seul le serveur met à jour la position de l'entite.
         if (IsServer)
         {
-            UpdatePositionServer();
+            m_Position.Value = UpdatedPosition(m_Position.Value);
         }
 
         // Seul le client qui possede cette entite peut envoyer ses inputs.
         if (IsClient && IsOwner)
         {
             UpdateInputClient();
+            m_LocalPosition = UpdatedPosition(m_LocalPosition);
         }
     }
 
-    private void UpdatePositionServer()
+    private Vector2 UpdatedPosition(Vector2 position)
     {
         // Mise a jour de la position selon dernier input reçu, puis consommation de l'input
         if (m_InputQueue.Count > 0)
         {
             var input = m_InputQueue.Dequeue();
-            m_Position.Value += input * m_Velocity * Time.deltaTime;
+            position += input * m_Velocity * Time.deltaTime;
 
             // Gestion des collisions avec l'exterieur de la zone de simulation
             var size = GameState.GameSize;
-            if (m_Position.Value.x - m_Size < -size.x)
+            if (position.x - m_Size < -size.x)
             {
-                m_Position.Value = new Vector2(-size.x + m_Size, m_Position.Value.y);
+                position = new Vector2(-size.x + m_Size, position.y);
             }
-            else if (m_Position.Value.x + m_Size > size.x)
+            else if (position.x + m_Size > size.x)
             {
-                m_Position.Value = new Vector2(size.x - m_Size, m_Position.Value.y);
+                position = new Vector2(size.x - m_Size, position.y);
             }
 
-            if (m_Position.Value.y + m_Size > size.y)
+            if (position.y + m_Size > size.y)
             {
-                m_Position.Value = new Vector2(m_Position.Value.x, size.y - m_Size);
+                position = new Vector2(position.x, size.y - m_Size);
             }
-            else if (m_Position.Value.y - m_Size < -size.y)
+            else if (position.y - m_Size < -size.y)
             {
-                m_Position.Value = new Vector2(m_Position.Value.x, -size.y + m_Size);
+                position = new Vector2(position.x, -size.y + m_Size);
             }
         }
+        return position;
     }
 
     private void UpdateInputClient()
@@ -123,9 +131,10 @@ public class Player : NetworkBehaviour
         {
             inputDirection += Vector2.right;
         }
-        SendInputServerRpc(inputDirection.normalized);
+        Vector2 input = inputDirection.normalized;
+        m_InputQueue.Enqueue(input);
+        SendInputServerRpc(input);
     }
-
 
     [ServerRpc]
     private void SendInputServerRpc(Vector2 input)
@@ -133,7 +142,4 @@ public class Player : NetworkBehaviour
         // On utilise une file pour les inputs pour les cas ou on en recoit plusieurs en meme temps.
         m_InputQueue.Enqueue(input);
     }
-
-
-
 }
