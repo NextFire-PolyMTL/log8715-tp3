@@ -1,9 +1,20 @@
 #define AZERTY
 
-using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+
+public struct TickInput : INetworkSerializeByMemcpy
+{
+    public int tick;
+    public Vector2 input;
+}
+
+public struct SimulationResult : INetworkSerializeByMemcpy
+{
+    public TickInput tickInput;
+    public Vector2 position;
+}
 
 public class Player : NetworkBehaviour
 {
@@ -42,21 +53,33 @@ public class Player : NetworkBehaviour
         }
     }
 
-    private NetworkVariable<Vector2> m_Position = new NetworkVariable<Vector2>();
+    private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();
 
-    private Vector2 m_LocalPosition;
-    public Vector2 Position => (IsClient && IsOwner) ? m_LocalPosition : m_Position.Value;
+    private Vector2 m_LocalPosition = new();
+    public Vector2 Position => (IsClient && IsOwner) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
 
-    private Queue<Vector2> m_InputQueue = new Queue<Vector2>();
+    private Queue<TickInput> m_TickInputQueue = new();
+    private Queue<SimulationResult> m_History = new();
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsClient && IsOwner)
+        {
+            m_LastServerSimulationResult.OnValueChanged += OnLastServerSimulationResultChanged;
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (IsClient && IsOwner)
+        {
+            m_LastServerSimulationResult.OnValueChanged -= OnLastServerSimulationResultChanged;
+        }
+    }
 
     private void Awake()
     {
         m_GameState = FindObjectOfType<GameState>();
-
-        if (IsClient && IsOwner)
-        {
-            m_LocalPosition = new();
-        }
     }
 
     private void FixedUpdate()
@@ -70,24 +93,34 @@ public class Player : NetworkBehaviour
         // Seul le serveur met à jour la position de l'entite.
         if (IsServer)
         {
-            m_Position.Value = UpdatedPosition(m_Position.Value);
+            var serverSimulationResult = Simulate(m_LastServerSimulationResult.Value.position, m_TickInputQueue);
+            if (!serverSimulationResult.Equals(default))
+            {
+                m_LastServerSimulationResult.Value = serverSimulationResult;
+            }
         }
 
         // Seul le client qui possede cette entite peut envoyer ses inputs.
         if (IsClient && IsOwner)
         {
-            UpdateInputClient();
-            m_LocalPosition = UpdatedPosition(m_LocalPosition);
+            var tickInput = new TickInput { tick = NetworkUtility.GetLocalTick(), input = GetInputClient() };
+            m_TickInputQueue.Enqueue(tickInput);
+
+            var clientSimulationResult = Simulate(m_LocalPosition, m_TickInputQueue);
+            m_LocalPosition = clientSimulationResult.position;
+            m_History.Enqueue(clientSimulationResult);
+
+            SendTickInputServerRpc(tickInput);
         }
     }
 
-    private Vector2 UpdatedPosition(Vector2 position)
+    private SimulationResult Simulate(Vector2 position, Queue<TickInput> tickInputQueue)
     {
         // Mise a jour de la position selon dernier input reçu, puis consommation de l'input
-        if (m_InputQueue.Count > 0)
+        if (tickInputQueue.Count > 0)
         {
-            var input = m_InputQueue.Dequeue();
-            position += input * m_Velocity * Time.deltaTime;
+            var tickInput = tickInputQueue.Dequeue();
+            position += tickInput.input * m_Velocity * Time.fixedDeltaTime;
 
             // Gestion des collisions avec l'exterieur de la zone de simulation
             var size = GameState.GameSize;
@@ -108,11 +141,14 @@ public class Player : NetworkBehaviour
             {
                 position = new Vector2(position.x, -size.y + m_Size);
             }
+
+            return new SimulationResult { tickInput = tickInput, position = position };
         }
-        return position;
+
+        return default;
     }
 
-    private void UpdateInputClient()
+    private Vector2 GetInputClient()
     {
         Vector2 inputDirection = new Vector2(0, 0);
         if (Input.GetKey(m_UpKeyCode))
@@ -131,15 +167,47 @@ public class Player : NetworkBehaviour
         {
             inputDirection += Vector2.right;
         }
-        Vector2 input = inputDirection.normalized;
-        m_InputQueue.Enqueue(input);
-        SendInputServerRpc(input);
+        return inputDirection.normalized;
     }
 
     [ServerRpc]
-    private void SendInputServerRpc(Vector2 input)
+    private void SendTickInputServerRpc(TickInput tickInput)
     {
         // On utilise une file pour les inputs pour les cas ou on en recoit plusieurs en meme temps.
-        m_InputQueue.Enqueue(input);
+        m_TickInputQueue.Enqueue(tickInput);
+    }
+
+    private void OnLastServerSimulationResultChanged(SimulationResult previous, SimulationResult current)
+    {
+        while (m_History.Count > 0 && m_History.Peek().tickInput.tick < current.tickInput.tick)
+        {
+            m_History.Dequeue();
+        }
+        if (m_History.Count > 0 && m_History.Peek().tickInput.tick == current.tickInput.tick)
+        {
+            var clientSimulationResult = m_History.Dequeue();
+            if (clientSimulationResult.position != current.position)
+            {
+                Reconciliate(current);
+            }
+        }
+    }
+
+    private void Reconciliate(SimulationResult serverSimulationResult)
+    {
+        var tempPosition = serverSimulationResult.position;
+        Queue<TickInput> tempTickInputQueue = new();
+        Queue<SimulationResult> correctedHistory = new();
+        while (m_History.Count > 0)
+        {
+            var clientSimulationResult = m_History.Dequeue();
+            tempTickInputQueue.Enqueue(clientSimulationResult.tickInput);
+            var correctedSimulationResult = Simulate(tempPosition, tempTickInputQueue);
+            tempPosition = correctedSimulationResult.position;
+            correctedHistory.Enqueue(correctedSimulationResult);
+        }
+        // Debug.Log($"Reconciliate: {m_LocalPosition} -> {tempPosition}");
+        m_LocalPosition = tempPosition;
+        m_History = correctedHistory;
     }
 }
