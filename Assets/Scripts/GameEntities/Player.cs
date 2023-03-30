@@ -1,5 +1,3 @@
-#define AZERTY
-
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -18,20 +16,6 @@ public struct SimulationResult : INetworkSerializeByMemcpy
 
 public class Player : NetworkBehaviour
 {
-    #region keycodes
-#if AZERTY
-    private const KeyCode m_UpKeyCode = KeyCode.Z;
-    private const KeyCode m_LeftKeyCode = KeyCode.Q;
-    private const KeyCode m_DownKeyCode = KeyCode.S;
-    private const KeyCode m_RightKeyCode = KeyCode.D;
-#else
-    private const KeyCode m_UpKeyCode = KeyCode.W;
-    private const KeyCode m_LeftKeyCode = KeyCode.A;
-    private const KeyCode m_DownKeyCode = KeyCode.S;
-    private const KeyCode m_RightKeyCode = KeyCode.D;
-#endif
-    #endregion
-
     [SerializeField]
     private float m_Velocity;
 
@@ -151,19 +135,19 @@ public class Player : NetworkBehaviour
     private Vector2 GetInputClient()
     {
         Vector2 inputDirection = new Vector2(0, 0);
-        if (Input.GetKey(m_UpKeyCode))
+        if (Input.GetKey(KeyCode.W))
         {
             inputDirection += Vector2.up;
         }
-        if (Input.GetKey(m_LeftKeyCode))
+        if (Input.GetKey(KeyCode.A))
         {
             inputDirection += Vector2.left;
         }
-        if (Input.GetKey(m_DownKeyCode))
+        if (Input.GetKey(KeyCode.S))
         {
             inputDirection += Vector2.down;
         }
-        if (Input.GetKey(m_RightKeyCode))
+        if (Input.GetKey(KeyCode.D))
         {
             inputDirection += Vector2.right;
         }
