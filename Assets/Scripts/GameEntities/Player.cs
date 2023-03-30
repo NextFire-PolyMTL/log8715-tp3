@@ -135,19 +135,19 @@ public class Player : NetworkBehaviour
     private Vector2 GetInputClient()
     {
         Vector2 inputDirection = new Vector2(0, 0);
-        if (Input.GetKey(KeyCode.W))
+        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
         {
             inputDirection += Vector2.up;
         }
-        if (Input.GetKey(KeyCode.A))
+        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
         {
             inputDirection += Vector2.left;
         }
-        if (Input.GetKey(KeyCode.S))
+        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
         {
             inputDirection += Vector2.down;
         }
-        if (Input.GetKey(KeyCode.D))
+        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
         {
             inputDirection += Vector2.right;
         }
@@ -190,7 +190,7 @@ public class Player : NetworkBehaviour
             tempPosition = correctedSimulationResult.position;
             correctedHistory.Enqueue(correctedSimulationResult);
         }
-        // Debug.Log($"Reconciliate: {m_LocalPosition} -> {tempPosition}");
+        Debug.Log($"Reconciliate: {m_LocalPosition} -> {tempPosition}");
         m_LocalPosition = tempPosition;
         m_History = correctedHistory;
     }
