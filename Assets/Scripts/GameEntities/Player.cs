@@ -40,14 +40,15 @@ public class Player : NetworkBehaviour
     private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();
 
     private Vector2 m_LocalPosition = new();
-    public Vector2 Position => (IsClient && IsOwner) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
+    public Vector2 Position => (IsClient) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
+    public Vector2 ghostPosition => (IsClient && !IsOwner) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
 
     private Queue<TickInput> m_TickInputQueue = new();
     private Queue<SimulationResult> m_History = new();
 
     public override void OnNetworkSpawn()
     {
-        if (IsClient && IsOwner)
+        if (IsClient)
         {
             m_LastServerSimulationResult.OnValueChanged += OnLastServerSimulationResultChanged;
         }
@@ -55,7 +56,7 @@ public class Player : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (IsClient && IsOwner)
+        if (IsClient)
         {
             m_LastServerSimulationResult.OnValueChanged -= OnLastServerSimulationResultChanged;
         }
@@ -96,8 +97,47 @@ public class Player : NetworkBehaviour
 
             SendTickInputServerRpc(tickInput);
         }
-    }
+        
+        // Seul le client qui ne possèdent pas cette entite peut estimer sa position.
+        
+        if (IsClient && !IsOwner)
+        {
+            var tickInput = m_LastServerSimulationResult.Value.tickInput;
 
+            var clientSimulationResult = SimulateGhost(m_LocalPosition, tickInput);
+            m_LocalPosition = clientSimulationResult.position;
+            m_History.Enqueue(clientSimulationResult);
+
+        }
+        
+    }
+    private SimulationResult SimulateGhost(Vector2 position, TickInput lastServerTick)
+    {
+        //On estime l'input du joueur fantôme par rapport au dernier input reçu
+        var estimatedtickInput = new TickInput { tick = NetworkUtility.GetLocalTick(), input = lastServerTick.input };
+        position += estimatedtickInput.input * m_Velocity * Time.fixedDeltaTime;
+        
+        // Gestion des collisions avec l'exterieur de la zone de simulation
+        var size = GameState.GameSize;
+        if (position.x - m_Size < -size.x)
+        {
+            position = new Vector2(-size.x + m_Size, position.y);
+        }
+        else if (position.x + m_Size > size.x)
+        {
+            position = new Vector2(size.x - m_Size, position.y);
+        }
+
+        if (position.y + m_Size > size.y)
+        {
+            position = new Vector2(position.x, size.y - m_Size);
+        }
+        else if (position.y - m_Size < -size.y)
+        {
+            position = new Vector2(position.x, -size.y + m_Size);
+        }
+        return new SimulationResult { tickInput = estimatedtickInput, position = position };
+    }
     private SimulationResult Simulate(Vector2 position, Queue<TickInput> tickInputQueue)
     {
         // Mise a jour de la position selon dernier input reçu, puis consommation de l'input
@@ -190,7 +230,7 @@ public class Player : NetworkBehaviour
             tempPosition = correctedSimulationResult.position;
             correctedHistory.Enqueue(correctedSimulationResult);
         }
-        Debug.Log($"Reconciliate: {m_LocalPosition} -> {tempPosition}");
+        //Debug.Log($"Reconciliate: {this.GetInstanceID()} {IsOwner} {m_LocalPosition} -> {tempPosition}");
         m_LocalPosition = tempPosition;
         m_History = correctedHistory;
     }
