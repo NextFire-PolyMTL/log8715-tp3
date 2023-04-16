@@ -254,7 +254,7 @@ public class Player : NetworkBehaviour
 
         Queue<SimulationResult> correctedHistory = new();
         if(m_History.Count > 0){
-            var clientSimulationResult = m_History.Dequeue();;
+            var clientSimulationResult = m_History.Dequeue();
             var correctedSimulationResult = SimulateGhost(tempPosition, tempTick);
             tempPosition = correctedSimulationResult.position;
             correctedHistory.Enqueue(correctedSimulationResult);
