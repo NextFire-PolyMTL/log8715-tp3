@@ -218,7 +218,7 @@ public class Player : NetworkBehaviour
                 }
             }else{
                 if (clientSimulationResult.position != current.position 
-                && clientSimulationResult.tickInput.input!=current.tickInput.input)
+                || clientSimulationResult.tickInput.input!=current.tickInput.input)
                 {
                     ReconciliateGhst(current);
                     
@@ -251,16 +251,16 @@ public class Player : NetworkBehaviour
         var tempTick = serverSimulationResult.tickInput;
         //Queue<TickInput> tempTickInputQueue = new();
         Queue<SimulationResult> correctedHistory = new();
-        
-        var clientSimulationResult = m_History.Dequeue();
-        //if(clientSimulationResult.tickInput.input!=tempTick.input){
-        //tempTickInputQueue.Enqueue(tempTick);
-        //}
-        //tempTickInputQueue.Enqueue(clientSimulationResult.tickInput);
-        var correctedSimulationResult = SimulateGhost(tempPosition, tempTick);
-        tempPosition = correctedSimulationResult.position;
-        correctedHistory.Enqueue(correctedSimulationResult);
-        
+        if(m_History.Count > 0){
+            var clientSimulationResult = m_History.Dequeue();
+            //if(clientSimulationResult.tickInput.input!=tempTick.input){
+            //tempTickInputQueue.Enqueue(tempTick);
+            //}
+            //tempTickInputQueue.Enqueue(clientSimulationResult.tickInput);
+            var correctedSimulationResult = SimulateGhost(tempPosition, tempTick);
+            tempPosition = correctedSimulationResult.position;
+            correctedHistory.Enqueue(correctedSimulationResult);
+        }
         //Debug.Log($"Reconciliate: {this.GetInstanceID()} {IsOwner} {m_LocalPosition} -> {tempPosition}");
         m_LocalPosition = tempPosition;
         m_History = correctedHistory;
