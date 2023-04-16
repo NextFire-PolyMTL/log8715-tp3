@@ -37,11 +37,9 @@ public class Player : NetworkBehaviour
         }
     }
 
-    private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();
-    //private NetworkVariable<ulong> owner_client_id=new(writePerm:NetworkVariableWritePermission.Owner);    
+    private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();  
     private Vector2 m_LocalPosition = new();
     public Vector2 Position => (IsClient) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
-    public Vector2 ghostPosition => (IsClient && !IsOwner) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
 
     private Queue<TickInput> m_TickInputQueue = new();
     private Queue<SimulationResult> m_History = new();
@@ -217,6 +215,7 @@ public class Player : NetworkBehaviour
                     
                 }
             }else{
+                //Réconciliation de la prédiction des ghosts par le client
                 if (clientSimulationResult.position != current.position 
                 || clientSimulationResult.tickInput.input!=current.tickInput.input)
                 {
@@ -245,23 +244,21 @@ public class Player : NetworkBehaviour
         m_History = correctedHistory;
     }
 
+    /* 
+    Méthode qui gère la réconcialiation de la prédiction de l'état de ghosts pas un client avec celle du serveur
+    */
     private void ReconciliateGhst(SimulationResult serverSimulationResult)
     {
         var tempPosition = serverSimulationResult.position;
         var tempTick = serverSimulationResult.tickInput;
-        //Queue<TickInput> tempTickInputQueue = new();
+
         Queue<SimulationResult> correctedHistory = new();
         if(m_History.Count > 0){
-            var clientSimulationResult = m_History.Dequeue();
-            //if(clientSimulationResult.tickInput.input!=tempTick.input){
-            //tempTickInputQueue.Enqueue(tempTick);
-            //}
-            //tempTickInputQueue.Enqueue(clientSimulationResult.tickInput);
+            var clientSimulationResult = m_History.Dequeue();;
             var correctedSimulationResult = SimulateGhost(tempPosition, tempTick);
             tempPosition = correctedSimulationResult.position;
             correctedHistory.Enqueue(correctedSimulationResult);
         }
-        //Debug.Log($"Reconciliate: {this.GetInstanceID()} {IsOwner} {m_LocalPosition} -> {tempPosition}");
         m_LocalPosition = tempPosition;
         m_History = correctedHistory;
     }
