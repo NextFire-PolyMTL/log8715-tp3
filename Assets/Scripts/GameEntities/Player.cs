@@ -37,7 +37,7 @@ public class Player : NetworkBehaviour
         }
     }
 
-    private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();  
+    private NetworkVariable<SimulationResult> m_LastServerSimulationResult = new();
     private Vector2 m_LocalPosition = new();
     public Vector2 Position => (IsClient) ? m_LocalPosition : m_LastServerSimulationResult.Value.position;
 
@@ -95,9 +95,9 @@ public class Player : NetworkBehaviour
 
             SendTickInputServerRpc(tickInput);
         }
-        
+
         // Seul le client qui ne possèdent pas cette entite peut estimer sa position.
-        
+
         if (IsClient && !IsOwner)
         {
             var tickInput = m_LastServerSimulationResult.Value.tickInput;
@@ -107,14 +107,14 @@ public class Player : NetworkBehaviour
             m_History.Enqueue(clientSimulationResult);
 
         }
-        
+
     }
     private SimulationResult SimulateGhost(Vector2 position, TickInput lastServerTick)
     {
         //On estime l'input du joueur fantôme par rapport au dernier input reçu
         var estimatedtickInput = new TickInput { tick = NetworkUtility.GetLocalTick(), input = lastServerTick.input };
         position += estimatedtickInput.input * m_Velocity * Time.fixedDeltaTime;
-        
+
         // Gestion des collisions avec l'exterieur de la zone de simulation
         var size = GameState.GameSize;
         if (position.x - m_Size < -size.x)
@@ -208,19 +208,22 @@ public class Player : NetworkBehaviour
         if (m_History.Count > 0 && m_History.Peek().tickInput.tick == current.tickInput.tick)
         {
             var clientSimulationResult = m_History.Dequeue();
-            if(IsOwner){
+            if (IsOwner)
+            {
                 if (clientSimulationResult.position != current.position)
                 {
                     Reconciliate(current);
-                    
+
                 }
-            }else{
+            }
+            else
+            {
                 //Réconciliation de la prédiction des ghosts par le client
-                if (clientSimulationResult.position != current.position 
-                || clientSimulationResult.tickInput.input!=current.tickInput.input)
+                if (clientSimulationResult.position != current.position
+                || clientSimulationResult.tickInput.input != current.tickInput.input)
                 {
                     ReconciliateGhst(current);
-                    
+
                 }
             }
         }
@@ -244,7 +247,7 @@ public class Player : NetworkBehaviour
         m_History = correctedHistory;
     }
 
-    /* 
+    /*
     Méthode qui gère la réconcialiation de la prédiction de l'état de ghosts pas un client avec celle du serveur
     */
     private void ReconciliateGhst(SimulationResult serverSimulationResult)
@@ -253,7 +256,8 @@ public class Player : NetworkBehaviour
         var tempTick = serverSimulationResult.tickInput;
 
         Queue<SimulationResult> correctedHistory = new();
-        if(m_History.Count > 0){
+        if (m_History.Count > 0)
+        {
             var clientSimulationResult = m_History.Dequeue();
             var correctedSimulationResult = SimulateGhost(tempPosition, tempTick);
             tempPosition = correctedSimulationResult.position;
